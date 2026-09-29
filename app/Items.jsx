@@ -1,3 +1,5 @@
+import { Link } from 'react-router';
+
 // One row of the table is worth its own component: it is a function,
 // so it can be named, moved, and tested on its own.
 function ItemRow({ item }) {
@@ -9,7 +11,7 @@ function ItemRow({ item }) {
 				</td>
 				<td>
 					<span className="name">
-						<a href={`/item_view/${item.id}`}>{item.name}</a>
+						<Link to={`/item_view/${item.id}`}>{item.name}</Link>
 					</span>
 				</td>
 				<td className="price">${item.cost}</td>

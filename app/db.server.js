@@ -16,10 +16,10 @@ export function getReviews(itemId) {
 	return db.prepare('SELECT * FROM review WHERE item_id = ?').all(itemId);
 }
 
+// returns the saved row so the API can hand the real id back to the client
 export function addReview(itemId, author, content) {
-	db.prepare('INSERT INTO review (item_id, author, content) VALUES (?, ?, ?)').run(
-		itemId,
-		author,
-		content,
-	);
+	const { lastInsertRowid } = db
+		.prepare('INSERT INTO review (item_id, author, content) VALUES (?, ?, ?)')
+		.run(itemId, author, content);
+	return { id: lastInsertRowid, item_id: itemId, author, content };
 }
