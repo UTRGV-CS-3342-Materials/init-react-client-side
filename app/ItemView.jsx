@@ -3,7 +3,8 @@ import { Link } from 'react-router';
 
 function Review({ review }) {
 	return (
-		<div className="card w-100 mt-3">
+		// faded until the server confirms it
+		<div className="card w-100 mt-3" style={{ opacity: review.pending ? 0.5 : 1 }}>
 			<div className="card-header">
 				<em>{review.author}</em>
 			</div>
@@ -26,8 +27,9 @@ export function ItemView({ item, reviews, errors, author, content }) {
 		setBlank({ ...blank, [name]: value.trim() === '' });
 	}
 
-	// the list lives in client state now, so a new review can be added without a reload
+	// the list lives in client state now, so reviews can be added (and removed) without a reload
 	const [list, setList] = useState(reviews);
+	const [saveErrors, setSaveErrors] = useState([]);
 
 	async function submitReview(event) {
 		event.preventDefault();
@@ -35,23 +37,48 @@ export function ItemView({ item, reviews, errors, author, content }) {
 		const author = form.elements.author.value;
 		const content = form.elements.content.value;
 
-		// post as JSON and wait for the saved review to come back
-		const response = await fetch(`/api/item_view/${item.id}/reviews`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ author, content }),
-		});
+		// no point optimistically adding something we already know the server will reject
+		const nowBlank = { author: author.trim() === '', content: content.trim() === '' };
+		setBlank(nowBlank);
+		if (nowBlank.author || nowBlank.content) return;
 
-		// no error handling yet
-		if (!response.ok) return;
-		const { review } = await response.json();
-
-		// new state -> React re-renders the list with the review at the top
-		setList([review, ...list]);
+		// optimistic update: show the review right away with a temporary id, clear the form
+		const tempId = `temp-${Date.now()}`;
+		setList((current) => [{ id: tempId, author, content, pending: true }, ...current]);
+		setSaveErrors([]);
 		form.reset();
+
+		// rollback: take the review back out and give the user their text back
+		// (functional setList because other submits may have changed the list meanwhile)
+		function rollback(errors) {
+			setList((current) => current.filter((review) => review.id !== tempId));
+			form.elements.author.value = author;
+			form.elements.content.value = content;
+			setSaveErrors(errors);
+		}
+
+		try {
+			const response = await fetch(`/api/item_view/${item.id}/reviews`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ author, content }),
+			});
+			const body = await response.json();
+
+			if (!response.ok) {
+				rollback(body.errors);
+				return;
+			}
+
+			// confirmed: swap the temporary review for the real one (real id, trimmed text)
+			setList((current) => current.map((review) => (review.id === tempId ? body.review : review)));
+		} catch {
+			// network down, or the response wasn't JSON (e.g. a 500 error page)
+			rollback(['Could not save your review. Please try again.']);
+		}
 	}
 
-	const messages = [];
+	const messages = [...saveErrors];
 	if (blank.author) messages.push('Name is required.');
 	if (blank.content) messages.push('Review is required.');
 
@@ -82,6 +109,8 @@ export function ItemView({ item, reviews, errors, author, content }) {
 	
 					<div className="card w-100 mt-3">
 						<div className="card-body">
+							{/* No action attribute needed -- a form posts to the URL it is on.
+							    One URL, two methods: GET renders it, POST changes it. */}
 							{/* onSubmit only runs once the page is hydrated; before that (or with JS off)
 							    the plain POST to the route action still works */}
 							<form method="POST" onSubmit={submitReview}>
@@ -96,7 +125,8 @@ export function ItemView({ item, reviews, errors, author, content }) {
 								)}
 								<div className="form-group">
 									<label>Add your review!</label>
-									{/* defaultValue for unmanaged component */}
+									{/* defaultValue, not value: with no JavaScript on the page every
+									    input is uncontrolled. React only sets the starting text. */}
 									<input
 										className="form-control mb-1"
 										placeholder="Name"
@@ -106,7 +136,8 @@ export function ItemView({ item, reviews, errors, author, content }) {
 									/>
 								</div>
 								<div className="form-group">
-									{/* react uses value for textarea (HTML uses child conent) */}
+									{/* In HTML a textarea's value is its content. In React it is
+									    a prop -- children here would be an error. */}
 									<textarea
 										className="form-control mb-1"
 										placeholder="Review"
