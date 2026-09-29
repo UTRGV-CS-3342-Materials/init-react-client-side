@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 function Review({ review }) {
 	return (
 		<div className="card w-100 mt-3">
@@ -12,6 +14,21 @@ function Review({ review }) {
 }
 
 export function ItemView({ item, reviews, errors, author, content }) {
+	const failed = errors?.length > 0;
+	const [blank, setBlank] = useState({
+		author: failed && !author?.trim(),
+		content: failed && !content?.trim(),
+	});
+
+	function checkBlank(event) {
+		const { name, value } = event.target;
+		setBlank({ ...blank, [name]: value.trim() === '' });
+	}
+
+	const messages = [];
+	if (blank.author) messages.push('Name is required.');
+	if (blank.content) messages.push('Review is required.');
+
 	return (
 		<>
 			<div className="pb-2 mt-4 mb-2 border-bottom">
@@ -42,11 +59,11 @@ export function ItemView({ item, reviews, errors, author, content }) {
 							{/* No action attribute needed -- a form posts to the URL it is on.
 							    One URL, two methods: GET renders it, POST changes it. */}
 							<form method="POST">
-								{errors?.length > 0 && (
+								{messages.length > 0 && (
 									<div className="alert alert-danger">
 										<ul className="mb-0">
-											{errors.map((error) => (
-												<li key={error}>{error}</li>
+											{messages.map((message) => (
+												<li key={message}>{message}</li>
 											))}
 										</ul>
 									</div>
@@ -60,6 +77,7 @@ export function ItemView({ item, reviews, errors, author, content }) {
 										placeholder="Name"
 										name="author"
 										defaultValue={author}
+										onBlur={checkBlank}
 									/>
 								</div>
 								<div className="form-group">
@@ -70,6 +88,7 @@ export function ItemView({ item, reviews, errors, author, content }) {
 										placeholder="Review"
 										name="content"
 										defaultValue={content}
+										onBlur={checkBlank}
 									/>
 								</div>
 								<div className="form-group">
